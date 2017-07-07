@@ -105,8 +105,11 @@ public:
 
 private:
 
-  void AugmentedSigmaPoints(MatrixXd* Xsig_out);
-  void SigmaPointPrediction(MatrixXd* Xsig_out, MatrixXd Xsig_aug, double delta_t);
+  MatrixXd AugmentedSigmaPoints();
+  MatrixXd SigmaPointPrediction(MatrixXd Xsig_aug, double delta_t);
+  void PredictMeanAndCovariance(MatrixXd Xsig_pred);
+  void PredictRadarMeasurement(MatrixXd Xsig_pred, VectorXd* z_out, MatrixXd* S_out);
+  void UpdateState(MatrixXd Xsig_pred, MatrixXd Zsig, VectorXd z_pred, VectorXd z, MatrixXd S);
 };
 
 #endif /* UKF_H */
