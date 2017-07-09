@@ -76,7 +76,6 @@ UKF::~UKF() {}
 void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
   if (!is_initialized_) {
     // first measurement
-    x_ = VectorXd(4);
     float px, py, vx, vy;
 
     if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
@@ -102,14 +101,19 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
       py = 1e-4;
     }
 
-    x_ << px, py, vx, vy;
+    float v = sqrt(vx * vx + vy * vy);
+    x_ << px, py, v, 0, 0;
 
     //state covariance matrix P
-    P_ = MatrixXd(4, 4);
-    P_ << 1, 0, 0, 0,
-          0, 1, 0, 0,
-          0, 0, 1000, 0,
-          0, 0, 0, 1000;
+    P_ = MatrixXd::Identity(n_x_, n_x_);
+
+    // set weights
+    double weight_0 = lambda_/(lambda_+n_aug_);
+    weights_(0) = weight_0;
+    for (int i=1; i<2*n_aug_+1; i++) {  //2n+1 weights
+      double weight = 0.5/(n_aug_+lambda_);
+      weights_(i) = weight;
+    }
 
     time_us_ = meas_package.timestamp_;
     // done initializing, no need to predict or update
@@ -117,9 +121,11 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     return;
   }
 
-  double delta_t = (meas_package.timestamp_ - time_us_) / 1e6;
+  double delta_t = (meas_package.timestamp_ - time_us_) * 1e-6;
   time_us_ = meas_package.timestamp_;
   Prediction(delta_t);
+  cout << "x: " << x_ << endl;
+  cout << "P: " << P_ << endl;
   if (meas_package.sensor_type_ == MeasurementPackage::RADAR && use_radar_) {
     UpdateRadar(meas_package);
   }
@@ -180,10 +186,10 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
     // measurement model
     Zsig(0,i) = sqrt(p_x*p_x + p_y*p_y);                        //r
     Zsig(1,i) = atan2(p_y,p_x);                                 //phi
-    Zsig(2,i) = (p_x*v1 + p_y*v2 ) / sqrt(p_x*p_x + p_y*p_y);   //r_dot
+    Zsig(2,i) = (p_x*v1 + p_y*v2 ) / Zsig(0,i);   //r_dot
   }
 
-  PredictRadarMeasurement(Zsig);
+  PredictRadarMeasurement(Zsig, meas_package.raw_measurements_);
 }
 
 // Helper methods
@@ -213,7 +219,7 @@ MatrixXd UKF::AugmentedSigmaPoints() {
   MatrixXd L = P_aug.llt().matrixL();
 
   //create augmented sigma points
-  Xsig_aug.col(0)  = x_aug;
+  Xsig_aug.col(0) = x_aug;
   for (int i = 0; i < n_aug_; i++)
   {
     Xsig_aug.col(i+1)        = x_aug + sqrt(lambda_+n_aug_) * L.col(i);
@@ -275,20 +281,8 @@ void UKF::SigmaPointPrediction(MatrixXd Xsig_aug, double delta_t) {
 }
 
 void UKF::PredictMeanAndCovariance() {
-
-  // set weights
-  double weight_0 = lambda_/(lambda_+n_aug_);
-  weights_(0) = weight_0;
-  for (int i=1; i<2*n_aug_+1; i++) {  //2n+1 weights
-    double weight = 0.5/(n_aug_+lambda_);
-    weights_(i) = weight;
-  }
-
   //predicted state mean
-  x_.fill(0.0);
-  for (int i = 0; i < 2 * n_aug_ + 1; i++) {  //iterate over sigma points
-    x_ = x_ + weights_(i) * Xsig_pred_.col(i);
-  }
+  x_ = Xsig_pred_ * weights_;
 
   //predicted state covariance matrix
   P_.fill(0.0);
@@ -304,17 +298,14 @@ void UKF::PredictMeanAndCovariance() {
   }
 }
 
-void UKF::PredictRadarMeasurement(MatrixXd Zsig) {
+void UKF::PredictRadarMeasurement(MatrixXd Zsig, VectorXd z) {
   int n_z = 3;
   //mean predicted measurement
   VectorXd z_pred = VectorXd(n_z);
-  z_pred.fill(0.0);
-  for (int i=0; i < 2*n_aug_+1; i++) {
-      z_pred = z_pred + weights_(i) * Zsig.col(i);
-  }
+  z_pred = Zsig * weights_;
 
   //measurement covariance matrix S
-  MatrixXd S = MatrixXd(n_z,n_z);
+  MatrixXd S = MatrixXd(n_z, n_z);
   S.fill(0.0);
   for (int i = 0; i < 2 * n_aug_ + 1; i++) {  //2n+1 simga points
     //residual
@@ -334,17 +325,13 @@ void UKF::PredictRadarMeasurement(MatrixXd Zsig) {
           0, 0,std_radrd_*std_radrd_;
   S = S + R;
 
-  UpdateState(Zsig, z_pred, S, n_z);
+  UpdateState(Zsig, z, S, n_z);
 }
 
 void UKF::UpdateState(MatrixXd Zsig, VectorXd z, MatrixXd S, int n_z) {
   //create matrix for cross correlation Tc
   MatrixXd Tc = MatrixXd(n_x_, n_z);
   VectorXd z_pred  = Zsig * weights_;
-
-/*******************************************************************************
- * Student part begin
- ******************************************************************************/
 
   //calculate cross correlation matrix
   Tc.fill(0.0);
