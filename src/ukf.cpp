@@ -12,7 +12,7 @@ using std::vector;
  */
 UKF::UKF() {
   // if this is false, laser measurements will be ignored (except during init)
-  use_laser_ = false;
+  use_laser_ = true;
 
   // if this is false, radar measurements will be ignored (except during init)
   use_radar_ = true;
@@ -150,14 +150,16 @@ void UKF::Prediction(double delta_t) {
  * @param {MeasurementPackage} meas_package
  */
 void UKF::UpdateLidar(MeasurementPackage meas_package) {
-  /**
-  TODO:
+  int n_z = 2;
+  MatrixXd R = MatrixXd(n_z, n_z);
+  R << std_laspx_ * std_laspx_, 0,
+       0, std_laspy_ * std_laspy_;
 
-  Complete this function! Use lidar data to update the belief about the object's
-  position. Modify the state vector, x_, and covariance, P_.
+  //create matrix for sigma points in measurement space
+  MatrixXd Zsig = MatrixXd(n_z, 2 * n_aug_ + 1);
+  Zsig = Xsig_pred_.block(0, 0, n_z, 2 * n_aug_ + 1);
 
-  You'll also need to calculate the lidar NIS.
-  */
+  PredictMeasurement(Zsig, meas_package.raw_measurements_, R, n_z);
 }
 
 /**
@@ -167,6 +169,12 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
 void UKF::UpdateRadar(MeasurementPackage meas_package) {
   //set measurement dimension, radar can measure r, phi, and r_dot
   int n_z = 3;
+
+  //add measurement noise covariance matrix
+  MatrixXd R = MatrixXd(n_z,n_z);
+  R <<    std_radr_*std_radr_, 0, 0,
+          0, std_radphi_*std_radphi_, 0,
+          0, 0,std_radrd_*std_radrd_;
 
   //create matrix for sigma points in measurement space
   MatrixXd Zsig = MatrixXd(n_z, 2 * n_aug_ + 1);
@@ -189,7 +197,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
     Zsig(2,i) = (p_x*v1 + p_y*v2 ) / Zsig(0,i);   //r_dot
   }
 
-  PredictRadarMeasurement(Zsig, meas_package.raw_measurements_);
+  PredictMeasurement(Zsig, meas_package.raw_measurements_, R, n_z);
 }
 
 // Helper methods
@@ -298,8 +306,7 @@ void UKF::PredictMeanAndCovariance() {
   }
 }
 
-void UKF::PredictRadarMeasurement(MatrixXd Zsig, VectorXd z) {
-  int n_z = 3;
+void UKF::PredictMeasurement(MatrixXd Zsig, VectorXd z, MatrixXd R, int n_z) {
   //mean predicted measurement
   VectorXd z_pred = VectorXd(n_z);
   z_pred = Zsig * weights_;
@@ -318,11 +325,6 @@ void UKF::PredictRadarMeasurement(MatrixXd Zsig, VectorXd z) {
     S = S + weights_(i) * z_diff * z_diff.transpose();
   }
 
-  //add measurement noise covariance matrix
-  MatrixXd R = MatrixXd(n_z,n_z);
-  R <<    std_radr_*std_radr_, 0, 0,
-          0, std_radphi_*std_radphi_, 0,
-          0, 0,std_radrd_*std_radrd_;
   S = S + R;
 
   UpdateState(Zsig, z, S, n_z);

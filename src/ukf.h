@@ -108,7 +108,7 @@ private:
   MatrixXd AugmentedSigmaPoints();
   void SigmaPointPrediction(MatrixXd Xsig_aug, double delta_t);
   void PredictMeanAndCovariance();
-  void PredictRadarMeasurement(MatrixXd Zsig, VectorXd z);
+  void PredictMeasurement(MatrixXd Zsig, VectorXd z, MatrixXd R, int n_z);
   void UpdateState(MatrixXd Zsig, VectorXd z, MatrixXd S, int n_z);
 };
 
