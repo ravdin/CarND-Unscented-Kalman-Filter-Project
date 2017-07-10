@@ -24,10 +24,10 @@ UKF::UKF() {
   P_ = MatrixXd(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 30;
+  std_a_ = 1.5;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = 30;
+  std_yawdd_ = 0.57;
 
   // Laser measurement noise standard deviation position1 in m
   std_laspx_ = 0.15;
@@ -54,11 +54,6 @@ UKF::UKF() {
 
   n_x_ = x_.size();
   n_aug_ = n_x_ + 2;
-  //Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 0.2;
-
-  //Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = 0.2;
 
   //define spreading parameter
   lambda_ = 3 - n_aug_;
@@ -124,8 +119,6 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
   double delta_t = (meas_package.timestamp_ - time_us_) * 1e-6;
   time_us_ = meas_package.timestamp_;
   Prediction(delta_t);
-  cout << "x: " << x_ << endl;
-  cout << "P: " << P_ << endl;
   if (meas_package.sensor_type_ == MeasurementPackage::RADAR && use_radar_) {
     UpdateRadar(meas_package);
   }
@@ -156,9 +149,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
        0, std_laspy_ * std_laspy_;
 
   //create matrix for sigma points in measurement space
-  MatrixXd Zsig = MatrixXd(n_z, 2 * n_aug_ + 1);
-  Zsig = Xsig_pred_.block(0, 0, n_z, 2 * n_aug_ + 1);
-
+  MatrixXd Zsig = Xsig_pred_.block(0, 0, n_z, 2 * n_aug_ + 1);
   PredictMeasurement(Zsig, meas_package.raw_measurements_, R, n_z);
 }
 
